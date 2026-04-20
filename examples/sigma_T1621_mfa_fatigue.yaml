@@ -1,0 +1,26 @@
+title: BeastIntel_T1621_MFA_Request_Generation
+id: auto-generated
+status: experimental
+description: >
+    Detects activity associated with MITRE ATT&CK T1621
+    (Multi-Factor Authentication Request Generation).
+    Adversaries in possession of valid credentials generate repeated MFA
+    push notifications to fatigue the target user into approving access.
+references:
+    - https://attack.mitre.org/techniques/T1621
+tags:
+    - attack.t1621
+    - attack.credential-access
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: '__REPLACE_WITH_SPECIFIC_VALUE__'
+    condition: selection
+falsepositives:
+    - Legitimate administrative activity
+    - Security tooling
+level: medium
+# BeastIntel note: Replace placeholder with actor-specific IOCs or strings.
+# For MFA fatigue, consider alerting on >3 MFA push denials per user per hour in your IdP logs.
