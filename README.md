@@ -11,8 +11,6 @@ A personal threat intelligence lab built to bridge 20 years of operational intel
 
 This project documents the design, deployment, and ongoing development of a production-grade Cyber Threat Intelligence platform running on Google Cloud Platform. The platform centralises threat intelligence into a structured STIX 2.1 knowledge graph, correlating threat actors, malware, TTPs, CVEs and indicators across multiple live feeds — enriched with MITRE ATT&CK mappings and surfaced through **Beast Intel**, a custom MCP server that enables AI-native analyst workflows via Claude Code.
 
-This is not a tutorial follow-along. It is a working platform built from first principles, informed by real-world operational intelligence experience in UK law enforcement cyber crime, and actively used for live threat intelligence production.
-
 ---
 
 ## Architecture
@@ -22,7 +20,7 @@ This is not a tutorial follow-along. It is a working platform built from first p
 | Component | Technology |
 |-----------|------------|
 | Cloud Platform | Google Cloud Platform (Compute Engine) |
-| VM OS | Ubuntu Server 22.04 LTS |
+| VM OS | OS: Ubuntu 22.04 LTS Machine Type: e2-highmem-4 vCPUs: 4 Memory: 32 GB RAM CPU Platform: Intel Broadwell Provisioning Model: Standard (not preemptible/spot), meaning it won't be reclaimed by Google Cloud for capacity reasons. Storage Boot Disk: 100 GB Standard Persistent Disk.|
 | CTI Platform | OpenCTI 6.x |
 | Containerisation | Docker Compose |
 | Search & Storage | Elasticsearch |
