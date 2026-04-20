@@ -1,183 +1,202 @@
 
-
 # 🧠 cozyad-cti-lab
 
-### Production-Grade Azure Threat Intelligence Platform | OpenCTI | MITRE ATT&CK | Microsoft Sentinel
+### Production-Grade Cyber Threat Intelligence Platform | OpenCTI | Beast Intel | MITRE ATT&CK | AI-Native Analysis
 
-> *A personal threat intelligence lab built to bridge 20 years of operational intelligence experience with modern commercial CTI engineering — from concept to production on Azure for under £10/month.*
+A personal threat intelligence lab built to bridge 20 years of operational intelligence experience with modern commercial CTI engineering — from concept to production on Google Cloud Platform for under £15/month.
 
------
+---
 
 ## Overview
 
-This project documents the design, deployment, and ongoing development of a production-grade Cyber Threat Intelligence (CTI) platform built entirely on Microsoft Azure. The platform centralises threat intelligence into a structured knowledge graph, correlating threat actors, malware, TTPs, CVEs, and indicators across multiple live feeds — enriched with MITRE ATT&CK mappings and prepared for integration with Microsoft Sentinel and Defender XDR.
+This project documents the design, deployment, and ongoing development of a production-grade Cyber Threat Intelligence platform running on Google Cloud Platform. The platform centralises threat intelligence into a structured STIX 2.1 knowledge graph, correlating threat actors, malware, TTPs, CVEs and indicators across multiple live feeds — enriched with MITRE ATT&CK mappings and surfaced through **Beast Intel**, a custom MCP server that enables AI-native analyst workflows via Claude Code.
 
-This is not a tutorial follow-along. It’s a working platform built from first principles, informed by real-world operational intelligence experience in UK law enforcement cyber crime.
+This is not a tutorial follow-along. It is a working platform built from first principles, informed by real-world operational intelligence experience in UK law enforcement cyber crime, and actively used for live threat intelligence production.
 
------
+---
 
 ## Architecture
 
-```mermaid
-graph TB
-    subgraph Azure["☁️ Microsoft Azure"]
-        subgraph VM["Ubuntu 22.04 VM (B2s) — NSG: Home IP Only"]
-            subgraph Docker["Docker Compose Stack"]
-                OC[OpenCTI Platform]
-                ES[Elasticsearch]
-                RMQ[RabbitMQ]
-                RD[Redis]
-                MN[MinIO]
+### Stack
 
-                subgraph Connectors["Connectors"]
-                    C1[MITRE ATT&CK]
-                    C2[AlienVault OTX]
-                    C3[Malware Bazaar]
-                    C4[PhishTank]
-                    C5[CISA KEV]
-                end
+| Component | Technology |
+|-----------|------------|
+| Cloud Platform | Google Cloud Platform (Compute Engine) |
+| VM OS | Ubuntu Server 22.04 LTS |
+| CTI Platform | OpenCTI 6.x |
+| Containerisation | Docker Compose |
+| Search & Storage | Elasticsearch |
+| Message Queue | RabbitMQ |
+| Cache | Redis |
+| Object Storage | MinIO |
+| Remote Access | IAP Tunnel (Identity-Aware Proxy) — no public IP exposure |
+| AI Analyst Interface | Claude Code + Beast Intel MCP Server |
+| IaC | Docker Compose / .env (Terraform planned) |
 
-                C1 & C2 & C3 & C4 & C5 -->|STIX 2.1| RMQ
-                RMQ --> OC
-                OC --> ES
-                OC --> RD
-                OC --> MN
-            end
-        end
+### Beast Intel — MCP Server
 
-        LAW[Log Analytics Workspace]
-        DEF[Microsoft Defender]
-        SEN[/"Microsoft Sentinel\n(In Progress)"/]
+The core innovation of this build is **Beast Intel** — a custom Model Context Protocol (MCP) server that wraps OpenCTI's GraphQL API and exposes structured threat intelligence tools directly to Claude Code. This enables AI-native analyst workflows where natural language queries are translated into live platform calls.
 
-        VM --> LAW
-        VM --> DEF
-        LAW -.->|Planned| SEN
-    end
+Beast Intel exposes 14 tools across four capability categories:
 
-    ATTACK[🌐 MITRE ATT&CK] --> C1
-    OTX[🌐 AlienVault OTX] --> C2
-    MB[🌐 Malware Bazaar] --> C3
-    PT[🌐 PhishTank] --> C4
-    KEV[🌐 CISA KEV] --> C5
+**Discovery**
+- `list_all_intrusion_sets` — enumerate all tracked threat actors
+- `get_sector_actors` — actors known to target a specific industry
+
+**Actor Profiling**
+- `get_intrusion_set_profile` — motivation, sophistication, aliases
+- `get_intrusion_set_ttps` — MITRE ATT&CK technique mapping
+- `get_intrusion_set_infrastructure` — malware and infrastructure associations
+- `get_related_actors` — cluster overlap and relationship analysis
+- `get_campaigns` — historical operations and objectives
+- `get_indicators` — IOCs for detection and hunting
+- `get_malware_profile` — capabilities, C2 method, evasion techniques
+
+**Detection Engineering**
+- `generate_yara_rule` — YARA rule generation from actor tooling
+- `generate_yara_rules_for_actor` — bulk YARA for actor's full toolkit
+- `generate_sigma_rule` — Sigma detection rule generation
+- `generate_sigma_rules_for_actor` — bulk Sigma for actor TTPs
+
+**Adversary Emulation**
+- `export_to_caldera` — convert threat intel to CALDERA adversary profile
+
+### Connection Architecture
+
+```
+Claude Code (Windows)
+       │
+       │ SSH via IAP Tunnel (127.0.0.1:2222)
+       │
+GCP Compute Engine VM
+       │
+       ├── mcp_stdin_filter.py  ←── Beast Intel MCP Server
+       │         │
+       │    OpenCTI GraphQL API (localhost:8080/graphql)
+       │         │
+       └── Docker Compose Stack
+             ├── OpenCTI
+             ├── Elasticsearch
+             ├── RabbitMQ
+             ├── Redis
+             └── MinIO
 ```
 
------
+No public IP. All access via GCP Identity-Aware Proxy — authenticated, audited, zero exposed attack surface.
 
-## Stack
-
-|Component          |Technology                     |
-|-------------------|-------------------------------|
-|Cloud Platform     |Microsoft Azure                |
-|VM OS              |Ubuntu Server 22.04 LTS        |
-|CTI Platform       |OpenCTI 6.x                    |
-|Containerisation   |Docker Compose                 |
-|Search & Storage   |Elasticsearch                  |
-|Message Queue      |RabbitMQ                       |
-|Cache              |Redis                          |
-|Object Storage     |MinIO                          |
-|SIEM (In Progress) |Microsoft Sentinel + LAW       |
-|Endpoint Protection|Microsoft Defender for Cloud   |
-|IaC                |YAML / .env (Terraform planned)|
-|Remote Access      |SSH (IP-restricted NSG)        |
-
------
+---
 
 ## Threat Intelligence Feeds
 
 ### Live Connectors
 
 **MITRE ATT&CK**
+- Full ATT&CK Enterprise matrix — tactics, techniques, sub-techniques, software, group profiles
+- Analytical backbone for TTP mapping across all other feeds
 
-- Full ATT&CK Enterprise matrix ingested
-- Tactics, techniques, sub-techniques, software and threat actor group profiles
-- Provides the analytical backbone for TTP mapping across all other feeds
+**Ransomware.live**
+- Real-time ransomware victim claims with actor attribution
+- HudsonRock infostealer corroboration data where available
+- Ingested as STIX Report objects linked to Intrusion Set actors
 
 **AlienVault OTX**
-
-- Community and vendor-contributed threat intelligence
-- IOCs including IPs, domains, file hashes, and URLs
+- Community and vendor-contributed IOCs
+- IPs, domains, file hashes, URLs
 - Pulse-based ingestion with automatic STIX object creation
 
 **Malware Bazaar (Abuse.ch)**
-
 - High-volume malware sample metadata
 - File hashes, tags, malware family classifications
-- Real-time feed of newly submitted samples
 
 **PhishTank**
-
 - Verified phishing URL database
-- Community-verified indicators
-- Useful for credential harvesting campaign tracking
+- Credential harvesting campaign tracking
 
-**CISA Known Exploited Vulnerabilities (KEV)**
-
-- CISA’s authoritative catalogue of CVEs actively exploited in the wild
-- Prioritised vulnerability intelligence used by every serious threat intel team
-- Cuts through NVD noise — if CISA says it’s being exploited, it matters
-- Critical for understanding what threat actors are actually using right now
+**CISA KEV**
+- CISA's authoritative catalogue of CVEs actively exploited in the wild
+- Prioritised vulnerability intelligence — if CISA flags it, threat actors are using it
 
 ### Data Flow
 
 ```
 External Feeds → Connectors → RabbitMQ → OpenCTI Workers → Elasticsearch
-                                                                    ↓
+                                                                  │
                                                          Knowledge Graph
                                                          (STIX 2.1 objects)
-                                                                    ↓
+                                                                  │
                                               ATT&CK Enrichment & Correlation
-                                                                    ↓
-                                                    [Sentinel — In Progress]
+                                                                  │
+                                                     Beast Intel MCP Layer
+                                                                  │
+                                                    Claude Code AI Analysis
 ```
 
------
+---
+
+## AI-Native Analyst Workflows
+
+The integration of Beast Intel with Claude Code enables analyst workflows that would previously require manual platform navigation. Examples from live use:
+
+**TTP Chain Analysis**
+Query an actor's full technique set, map to MITRE ATT&CK IDs, and generate a structured kill chain narrative — in a single natural language request against the live platform.
+
+**Victim Intelligence**
+Bypass the MCP tool layer when needed — query the OpenCTI GraphQL API directly via the IAP tunnel to run free-text searches across the full object graph, surfacing victim organisation intelligence not exposed through structured tools.
+
+**Cross-Source Corroboration**
+Combine Beast Intel actor data with open-source reporting, Ransomware.live entries, and HudsonRock infostealer attribution to produce confidence-assessed intelligence products — distinguishing single-source actor claims from independently corroborated incidents.
+
+**Detection Generation**
+Generate YARA and Sigma rules directly from actor TTP profiles and malware characteristics, ready for deployment into detection engineering pipelines.
+
+---
 
 ## Security & Infrastructure
 
-Designed in alignment with the [Azure Well-Architected Framework](https://learn.microsoft.com/en-us/azure/well-architected/) security pillar:
+Designed with GCP security best practices:
 
-- **Network Security Group (NSG)**: Inbound access restricted to single home IP — deny-by-default, explicit permit only. No public exposure
-- **Microsoft Defender for Cloud**: VM-level threat protection, vulnerability assessment and security recommendations
-- **Log Analytics Workspace**: Centralised diagnostic logging and security event visibility foundation for Sentinel
-- **Least Privilege / RBAC**: Service accounts and roles scoped to minimum required permissions, aligned with Zero Trust principles
-- **Cost Controls**: Budget alerts configured, right-sized VM selection for sub-£5/month operation
-- **Planned**: Microsoft Entra ID managed identities to eliminate stored credentials — current best practice for Azure workload identity
+- **Identity-Aware Proxy (IAP):** All VM access via authenticated IAP tunnel — no public IP, no SSH exposure to the internet
+- **Service Account:** Least-privilege GCP service account with `mcp-sa-key.json` for platform authentication
+- **No stored credentials in code:** All secrets managed via `.env` files excluded from version control
+- **Firewall rules:** Deny-by-default, explicit permit only for required inter-service communication
+- **Google Cloud Monitoring:** VM and container health monitoring (Security Command Center integration planned)
 
------
+---
 
 ## Why I Built This
 
-I have spent 20 years delivering threat intelligence operationally in UK law enforcement. I understood threat actors. I understood the intelligence cycle. I understood how to produce assessments that drove decisions. What I wanted to develop was the engineering side — how commercial CTI teams actually build and operate the platforms that underpin modern threat intelligence functions.
+I have spent 20 years delivering threat intelligence operationally in UK law enforcement. I understood threat actors, the intelligence cycle, and how to produce assessments that drove decisions at national and international level. What I wanted to develop was the engineering side — how commercial CTI teams actually build and operate the platforms that underpin modern threat intelligence functions.
 
-This lab is the answer to that question. Built from scratch, on a real cloud platform, with real data, at production standards — not a lab exercise but a working system I actively use and develop.
+This lab is the answer to that question. Built from scratch, on a real cloud platform, with real data, at production standards — not a lab exercise but a working system I actively use for intelligence production.
 
-It’s also a deliberate attempt to understand both sides of the intelligence function: the analytical craft I’ve practiced for two decades, and the technical infrastructure that makes scaled CTI operations possible in commercial environments.
+The Beast Intel MCP integration represents the next evolution: not just a platform that stores intelligence, but one that can be queried conversationally by an AI analyst — collapsing the distance between raw data and finished intelligence product.
 
------
+---
 
+## Planned
 
-### Planned
-
-- [ ] Additional OSINT feeds — abuse.ch URLhaus, Feodo Tracker
+- [ ] Google Security Command Center — security posture monitoring and threat detection for the GCP environment
+- [ ] Terraform IaC — reproducible deployment, version-controlled infrastructure
+- [ ] Neo4j graph layer — native graph queries for relationship traversal (victim → actor, actor → infrastructure)
+- [ ] Victim search MCP tool — expose free-text victim organisation search through the Beast Intel interface
+- [ ] Additional OSINT feeds — URLhaus, Feodo Tracker, abuse.ch ThreatFox
 - [ ] Malware sandbox connector integration
 - [ ] AI-assisted triage workflows — automated analyst and executive-level intelligence summaries
-- [ ] Terraform IaC — reproducible multi-cloud deployment (AWS, GCP portability)
-- [ ] Microsoft Entra ID managed identities — eliminate stored credentials, align with Zero Trust identity best practice
-- [ ] Azure Policy governance — compliance and security rule enforcement across resources
-- [ ] Honeypot VM — deliberate exposure for adversary observation, feeding IOCs back into OpenCTI
-- [ ] Simulated adversary campaigns — ATT&CK emulation using Atomic Red Team
-- [ ] Deception-based detection layer
+- [ ] CALDERA integration — ATT&CK emulation from Beast Intel actor profiles
+- [ ] Sigma/YARA pipeline — direct export to detection engineering tooling
+- [ ] Honeypot VM — adversary observation feeding IOCs back into OpenCTI
 
------
+---
 
 ## Skills Demonstrated
 
-`Threat Intelligence` `MITRE ATT&CK` `OpenCTI` `Microsoft Azure` `Docker Compose` `Elasticsearch` `STIX 2.1` `Microsoft Sentinel` `Log Analytics` `Linux Administration` `Infrastructure as Code` `Cloud Security` `Azure Well-Architected Framework` `Microsoft Entra ID` `Zero Trust` `Intelligence Cycle` `TTP Analysis` `IOC Management`
+`Threat Intelligence` `MITRE ATT&CK` `OpenCTI` `Google Cloud Platform` `Docker Compose` `Elasticsearch` `STIX 2.1` `MCP Server Development` `GraphQL` `Python` `AI-Native Workflows` `Claude Code` `Linux Administration` `IAP Tunnelling` `Intelligence Cycle` `TTP Analysis` `IOC Management` `Detection Engineering` `YARA` `Sigma` `Adversary Emulation` `Source Assessment` `Analytic Tradecraft`
 
------
+---
 
-*“The best threat intelligence comes from understanding how adversaries think — not just what tools they use.”*
 
------
+⚠️ *This repository documents architecture, methodology and tooling only. No sensitive data, credentials, operational intelligence, or victim-identifying information is included or referenced.*
 
-> ⚠️ This repository documents architecture, methodology and tooling only. No sensitive data, credentials, or operational intelligence is included or referenced.
+---
+
+*Actively developed. Last updated April 2026.*
