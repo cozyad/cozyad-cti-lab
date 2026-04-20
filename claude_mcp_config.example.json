@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "beastintel": {
+      "type": "stdio",
+      "command": "ssh",
+      "args": [
+        "-i", "/path/to/your/ssh-key",
+        "-o", "StrictHostKeyChecking=no",
+        "-p", "2222",
+        "user@127.0.0.1",
+        "OPENCTI_URL=http://localhost:8080 OPENCTI_TOKEN=your-token-here python3 -u /home/user/mcp_stdin_filter.py"
+      ]
+    }
+  }
+}
