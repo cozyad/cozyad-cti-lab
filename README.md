@@ -1,7 +1,7 @@
 
 # 🧠 cozyad-cti-lab
 
-### Production-Grade Cyber Threat Intelligence Platform | OpenCTI | Beast Intel | MITRE ATT&CK | AI-Native Analysis
+### Production-Grade Cyber Threat Intelligence Platform | Google Cloud | OpenCTI | Beast Intel | MITRE ATT&CK | AI-Native Analysis
 
 A personal threat intelligence lab built to bridge 20 years of operational intelligence experience with modern commercial CTI engineering — from concept to production on Google Cloud Platform.
 
