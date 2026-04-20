@@ -1,4 +1,3 @@
-
 # 🧠 cozyad-cti-lab
 
 ### Production-Grade Cyber Threat Intelligence Platform | Google Cloud | OpenCTI | Beast Intel | MITRE ATT&CK | AI-Native Analysis
@@ -20,7 +19,7 @@ This project documents the design, deployment, and ongoing development of a prod
 | Component | Technology |
 |-----------|------------|
 | Cloud Platform | Google Cloud Platform (Compute Engine) |
-| VM OS | OS: Ubuntu 22.04 LTS Machine Type: e2-highmem-4 vCPUs: 4 Memory: 32 GB RAM CPU Platform: Intel Broadwell Provisioning Model: Standard (not preemptible/spot), meaning it won't be reclaimed by Google Cloud for capacity reasons. Storage Boot Disk: 100 GB Standard Persistent Disk.|
+| VM OS | Ubuntu 22.04 LTS — e2-highmem-4, 4 vCPUs, 32 GB RAM, 100 GB Standard Persistent Disk |
 | CTI Platform | OpenCTI 6.x |
 | Containerisation | Docker Compose |
 | Search & Storage | Elasticsearch |
@@ -29,7 +28,7 @@ This project documents the design, deployment, and ongoing development of a prod
 | Object Storage | MinIO |
 | Remote Access | IAP Tunnel (Identity-Aware Proxy) — no public IP exposure |
 | AI Analyst Interface | Claude Code + Beast Intel MCP Server |
-| IaC | Docker Compose / .env (Terraform planned) |
+| IaC | Terraform (GCP provisioning) + Docker Compose |
 
 ### Beast Intel — MCP Server
 
@@ -68,7 +67,9 @@ Claude Code (Windows)
        │
 GCP Compute Engine VM
        │
-       ├── mcp_stdin_filter.py  ←── Beast Intel MCP Server
+       ├── mcp_stdin_filter.py
+       │         │
+       │   beast_intel_mcp.py  ←── Beast Intel MCP Server
        │         │
        │    OpenCTI GraphQL API (localhost:8080/graphql)
        │         │
@@ -97,22 +98,25 @@ No public IP. All access via GCP Identity-Aware Proxy — authenticated, audited
 - HudsonRock infostealer corroboration data where available
 - Ingested as STIX Report objects linked to Intrusion Set actors
 
-**AlienVault OTX**
-- Community and vendor-contributed IOCs
-- IPs, domains, file hashes, URLs
-- Pulse-based ingestion with automatic STIX object creation
+**CISA Known Exploited Vulnerabilities (KEV)**
+- CISA's authoritative catalogue of CVEs actively exploited in the wild
+- Prioritised vulnerability intelligence — if CISA flags it, threat actors are using it
 
-**Malware Bazaar (Abuse.ch)**
+**ThreatFox (Abuse.ch)**
+- Community-contributed IOC feed — IPs, domains, URLs, hashes
+- Malware family tagging and C2 infrastructure tracking
+
+**URLhaus (Abuse.ch)**
+- Malware distribution URLs and hosting infrastructure
+- Rapidly updated feed of active malware delivery campaigns
+
+**MalwareBazaar (Abuse.ch)**
 - High-volume malware sample metadata
 - File hashes, tags, malware family classifications
 
-**PhishTank**
-- Verified phishing URL database
-- Credential harvesting campaign tracking
-
-**CISA KEV**
-- CISA's authoritative catalogue of CVEs actively exploited in the wild
-- Prioritised vulnerability intelligence — if CISA flags it, threat actors are using it
+**VirusTotal (Enrichment)**
+- Enrichment connector for indicators — IPs, domains, URLs, file hashes
+- Confidence scoring and multi-vendor detection context
 
 ### Data Flow
 
@@ -147,6 +151,9 @@ Combine Beast Intel actor data with open-source reporting, Ransomware.live entri
 **Detection Generation**
 Generate YARA and Sigma rules directly from actor TTP profiles and malware characteristics, ready for deployment into detection engineering pipelines.
 
+**Adversary Emulation**
+Export a full actor TTP chain as a CALDERA adversary profile — 44 techniques for LAPSUS$ mapped to ATT&CK IDs and structured for red team emulation.
+
 ---
 
 ## Security & Infrastructure
@@ -154,7 +161,7 @@ Generate YARA and Sigma rules directly from actor TTP profiles and malware chara
 Designed with GCP security best practices:
 
 - **Identity-Aware Proxy (IAP):** All VM access via authenticated IAP tunnel — no public IP, no SSH exposure to the internet
-- **Service Account:** Least-privilege GCP service account with `mcp-sa-key.json` for platform authentication
+- **Service Account:** Least-privilege GCP service account for platform authentication
 - **No stored credentials in code:** All secrets managed via `.env` files excluded from version control
 - **Firewall rules:** Deny-by-default, explicit permit only for required inter-service communication
 - **Google Cloud Monitoring:** VM and container health monitoring (Security Command Center integration planned)
@@ -174,21 +181,17 @@ The Beast Intel MCP integration represents the next evolution: not just a platfo
 ## Planned
 
 - [ ] Google Security Command Center — security posture monitoring and threat detection for the GCP environment
-- [ ] Terraform IaC — reproducible deployment, version-controlled infrastructure
 - [ ] Neo4j graph layer — native graph queries for relationship traversal (victim → actor, actor → infrastructure)
 - [ ] Victim search MCP tool — expose free-text victim organisation search through the Beast Intel interface
-- [ ] Additional OSINT feeds — URLhaus, Feodo Tracker, abuse.ch ThreatFox
 - [ ] Malware sandbox connector integration
 - [ ] AI-assisted triage workflows — automated analyst and executive-level intelligence summaries
-- [ ] CALDERA integration — ATT&CK emulation from Beast Intel actor profiles
-- [ ] Sigma/YARA pipeline — direct export to detection engineering tooling
 - [ ] Honeypot VM — adversary observation feeding IOCs back into OpenCTI
 
 ---
 
 ## Skills Demonstrated
 
-`Threat Intelligence` `MITRE ATT&CK` `OpenCTI` `Google Cloud Platform` `Docker Compose` `Elasticsearch` `STIX 2.1` `MCP Server Development` `GraphQL` `Python` `AI-Native Workflows` `Claude Code` `Linux Administration` `IAP Tunnelling` `Intelligence Cycle` `TTP Analysis` `IOC Management` `Detection Engineering` `YARA` `Sigma` `Adversary Emulation` `Source Assessment` `Analytic Tradecraft`
+`Threat Intelligence` `MITRE ATT&CK` `OpenCTI` `Google Cloud Platform` `Terraform` `Docker Compose` `Elasticsearch` `STIX 2.1` `MCP Server Development` `GraphQL` `Python` `AI-Native Workflows` `Claude Code` `Linux Administration` `IAP Tunnelling` `Intelligence Cycle` `TTP Analysis` `IOC Management` `Detection Engineering` `YARA` `Sigma` `Adversary Emulation` `CALDERA` `Source Assessment` `Analytic Tradecraft`
 
 ---
 
