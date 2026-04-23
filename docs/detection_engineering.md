@@ -147,9 +147,10 @@ alert.suppress    = 0
 
 Query fired alerts:
 ```spl
-index=_audit action=alert_fired savedsearch_name="BeastIntel*" earliest=-24h
-| eval Rule=replace(savedsearch_name,"BeastIntel - LUMMAC2-","")
-| table _time Rule result_count savedsearch_name
+index=_audit action=alert_fired ss_name="BeastIntel*" earliest=-24h
+| eval Rule=replace(ss_name,"BeastIntel - LUMMAC2-","")
+| eval Rule=replace(Rule,"BeastIntel - ","")
+| table _time Rule result_count ss_name
 | sort - _time
 ```
 
