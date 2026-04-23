@@ -710,10 +710,6 @@ def export_to_caldera(actor_id: str, operation_name: str = "BeastIntel_Emulation
     }
 
 
-if __name__ == "__main__":
-    mcp.run()
-
-
 # ─── MENU ─────────────────────────────────────────────────────────────────────
 
 
@@ -828,6 +824,399 @@ def query_virustotal(observable: str):
         "reputation": attrs.get("reputation"),
         "link": f"https://www.virustotal.com/gui/{gui_type}/{observable}"
     }
+
+
+@mcp.tool()
+def fetch_report(url: str, max_chars: int = 50000) -> dict:
+    """
+    CTI Report Fetcher (tool 16).
+    Fetches a vendor threat report URL and returns the cleaned text content
+    so Claude can extract TTPs, IOCs, malware families and actors from it.
+    After calling this tool, Claude reads the content and calls push_intel_to_opencti()
+    with the extracted intel JSON.
+    max_chars: how much text to return (default 50000 — fits comfortably in context).
+    """
+    import re
+    import requests as _req
+
+    try:
+        try:
+            import trafilatura
+            downloaded = trafilatura.fetch_url(url)
+            content = trafilatura.extract(
+                downloaded,
+                include_tables=True,
+                include_links=False,
+                no_fallback=False
+            ) or ""
+        except ImportError:
+            resp = _req.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+            content = re.sub(r'<[^>]+>', ' ', resp.text)
+            content = re.sub(r'\s+', ' ', content).strip()
+
+        if not content.strip():
+            return {"error": "Could not extract readable content from URL — try a different URL or paste the text directly"}
+
+        content = content[:max_chars]
+        return {
+            "url": url,
+            "char_count": len(content),
+            "content": content,
+            "instructions": (
+                "Extract threat intelligence from the content above. "
+                "Then call push_intel_to_opencti() with this exact JSON structure:\n"
+                '{"report_meta": {"title": "", "published": "YYYY-MM-DD", "authors": [], "tlp": "white"}, '
+                '"malware": [{"name": "", "aliases": [], "description": "", "malware_types": ["infostealer"], "is_family": true}], '
+                '"threat_actors": [{"name": "", "aliases": [], "description": "", "sophistication": "intermediate", "motivation": "financial-gain"}], '
+                '"ttps": [{"technique_id": "T1234", "technique_name": "", "tactic": "", "description": ""}], '
+                '"iocs": [{"type": "domain-name|ipv4-addr|url|file", "value": "", "hashes": {}, "description": "", "confidence": 80}], '
+                '"vulnerabilities": [{"cve": "CVE-YYYY-NNNNN", "description": ""}]}'
+            )
+        }
+    except Exception as e:
+        return {"error": f"Fetch failed: {e}"}
+
+
+@mcp.tool()
+def push_intel_to_opencti(intel_json: str, dry_run: bool = False) -> dict:
+    """
+    CTI Intel Push (tool 17).
+    Takes extracted threat intelligence as a JSON string (from Claude's analysis
+    of a fetch_report result), builds a STIX2.1 bundle, and imports it into OpenCTI.
+    Creates: Malware, Threat-Actor, Attack-Pattern, Indicator, Vulnerability,
+    Report objects and all relationships between them.
+    Set dry_run=True to preview the bundle without pushing to OpenCTI.
+    intel_json must match the schema from fetch_report instructions.
+    """
+    import re, uuid
+
+    try:
+        intel = json.loads(intel_json)
+    except json.JSONDecodeError as e:
+        return {"error": f"Invalid JSON: {e}"}
+
+    TLP_W = "marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9"
+    NS    = uuid.UUID("00abedb4-aa42-466c-9c01-fed23315a9b7")
+    now   = __import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def sid(t, v):
+        return f"{t}--{uuid.uuid5(NS, f'{t}:{v.lower()}')}"
+
+    def rel(objs, src, rtype, tgt, by):
+        objs.append({
+            "type": "relationship", "spec_version": "2.1",
+            "id": sid("relationship", f"{src}:{rtype}:{tgt}"),
+            "created": now, "modified": now, "created_by_ref": by,
+            "relationship_type": rtype, "source_ref": src, "target_ref": tgt,
+            "object_marking_refs": [TLP_W]
+        })
+
+    meta   = intel.get("report_meta") or {}
+    author = ((meta.get("authors") or ["Unknown"])[0])
+    iid    = sid("identity", author)
+    objs   = [{"type": "identity", "spec_version": "2.1", "id": iid,
+               "created": now, "modified": now, "name": author,
+               "identity_class": "organization"}]
+    mids, aids, tids, oids, vids = {}, {}, {}, [], []
+
+    # Malware
+    for m in intel.get("malware") or []:
+        mid = sid("malware", m["name"])
+        mids[m["name"]] = mid
+        o = {"type": "malware", "spec_version": "2.1", "id": mid,
+             "created": now, "modified": now, "created_by_ref": iid,
+             "name": m["name"], "description": m.get("description", ""),
+             "malware_types": m.get("malware_types") or ["unknown"],
+             "is_family": m.get("is_family", True),
+             "object_marking_refs": [TLP_W]}
+        if m.get("aliases"):
+            o["aliases"] = m["aliases"]
+        objs.append(o)
+
+    # Threat actors
+    for a in intel.get("threat_actors") or []:
+        aid = sid("threat-actor", a["name"])
+        aids[a["name"]] = aid
+        objs.append({
+            "type": "threat-actor", "spec_version": "2.1", "id": aid,
+            "created": now, "modified": now, "created_by_ref": iid,
+            "name": a["name"], "description": a.get("description", ""),
+            "aliases": a.get("aliases") or [],
+            "sophistication": a.get("sophistication", "intermediate"),
+            "resource_level": "criminal",
+            "primary_motivation": a.get("motivation", "financial-gain"),
+            "object_marking_refs": [TLP_W]
+        })
+
+    # TTPs
+    for t in intel.get("ttps") or []:
+        key = t.get("technique_id") or t.get("technique_name", "unknown")
+        tid = sid("attack-pattern", key)
+        tids[key] = tid
+        o = {"type": "attack-pattern", "spec_version": "2.1", "id": tid,
+             "created": now, "modified": now, "created_by_ref": iid,
+             "name": t.get("technique_name", key),
+             "description": t.get("description", ""),
+             "kill_chain_phases": [{"kill_chain_name": "mitre-attack",
+                                    "phase_name": t.get("tactic", "unknown")}],
+             "object_marking_refs": [TLP_W]}
+        if t.get("technique_id"):
+            o["external_references"] = [{"source_name": "mitre-attack",
+                "external_id": t["technique_id"],
+                "url": f"https://attack.mitre.org/techniques/{t['technique_id'].replace('.','/')}/"}]
+        objs.append(o)
+
+    # IOCs → Indicators
+    for ioc in intel.get("iocs") or []:
+        tp, val = ioc.get("type", ""), ioc.get("value", "")
+        pattern = None
+        if tp == "domain-name" and val:
+            pattern = f"[domain-name:value = '{val}']"
+        elif tp == "ipv4-addr" and val:
+            pattern = f"[ipv4-addr:value = '{val}']"
+        elif tp == "url" and val:
+            pattern = f"[url:value = '{val}']"
+        elif tp == "file":
+            h = ioc.get("hashes") or {}
+            if h.get("SHA-256"):   pattern = f"[file:hashes.'SHA-256' = '{h['SHA-256']}']"
+            elif h.get("MD5"):     pattern = f"[file:hashes.MD5 = '{h['MD5']}']"
+            elif h.get("SHA-1"):   pattern = f"[file:hashes.'SHA-1' = '{h['SHA-1']}']"
+        if not pattern:
+            continue
+        oid = sid("indicator", pattern)
+        oids.append(oid)
+        objs.append({
+            "type": "indicator", "spec_version": "2.1", "id": oid,
+            "created": now, "modified": now, "created_by_ref": iid,
+            "name": ioc.get("description") or val or "indicator",
+            "description": ioc.get("description", ""),
+            "pattern": pattern, "pattern_type": "stix", "pattern_version": "2.1",
+            "valid_from": now,
+            "confidence": int(ioc.get("confidence") or 70),
+            "indicator_types": ["malicious-activity"],
+            "object_marking_refs": [TLP_W]
+        })
+
+    # Vulnerabilities
+    for v in intel.get("vulnerabilities") or []:
+        cve = (v.get("cve") or "").strip()
+        if not cve:
+            continue
+        vid = sid("vulnerability", cve)
+        vids.append(vid)
+        objs.append({
+            "type": "vulnerability", "spec_version": "2.1", "id": vid,
+            "created": now, "modified": now, "created_by_ref": iid,
+            "name": cve, "description": v.get("description", ""),
+            "external_references": [{"source_name": "cve", "external_id": cve,
+                "url": f"https://nvd.nist.gov/vuln/detail/{cve}"}],
+            "object_marking_refs": [TLP_W]
+        })
+
+    # Relationships
+    for m_id in mids.values():
+        for t_id in tids.values():
+            rel(objs, m_id, "uses", t_id, iid)
+    for a_id in aids.values():
+        for m_id in mids.values():
+            rel(objs, a_id, "uses", m_id, iid)
+        for t_id in tids.values():
+            rel(objs, a_id, "uses", t_id, iid)
+    for oid in oids:
+        for m_id in mids.values():
+            rel(objs, oid, "indicates", m_id, iid)
+
+    # Report envelope
+    source_url = meta.get("source_url", "")
+    pub        = meta.get("published") or now[:10]
+    all_refs   = list(set(list(mids.values()) + list(aids.values()) +
+                          list(tids.values()) + oids + vids + [iid]))
+    objs.append({
+        "type": "report", "spec_version": "2.1",
+        "id": sid("report", source_url or meta.get("title", now)),
+        "created": now, "modified": now, "created_by_ref": iid,
+        "name": meta.get("title") or "CTI Report",
+        "description": f"Ingested via Beast Intel MCP. Source: {source_url}",
+        "published": f"{pub}T00:00:00Z",
+        "report_types": ["threat-report"],
+        "object_refs": all_refs,
+        "external_references": ([{"source_name": author, "url": source_url}]
+                                 if source_url else []),
+        "object_marking_refs": [TLP_W]
+    })
+
+    bundle  = {"type": "bundle", "id": f"bundle--{uuid.uuid4()}", "objects": objs}
+    summary = {
+        "report_title":  meta.get("title", ""),
+        "malware":       len(mids),
+        "threat_actors": len(aids),
+        "ttps":          len(tids),
+        "iocs":          len(oids),
+        "vulnerabilities": len(vids),
+        "stix_objects":  len(objs)
+    }
+
+    if dry_run:
+        summary["status"] = "dry_run — bundle built but NOT pushed to OpenCTI"
+        return summary
+
+    try:
+        get_client().stix2.import_bundle_from_json(json.dumps(bundle))
+        summary["status"] = "successfully imported to OpenCTI"
+    except Exception as e:
+        summary["status"] = f"push failed: {e}"
+
+    return summary
+
+
+# Legacy single-step tool kept for backwards compat — now split into
+# fetch_report (16) + push_intel_to_opencti (17) for zero API cost
+@mcp.tool()
+def ingest_report(url: str, dry_run: bool = False) -> dict:
+    """
+    CTI Report Ingestion (tool 16).
+    Fetches a vendor threat report URL, extracts TTPs / IOCs / malware / actors
+    via Claude, builds a STIX2 bundle, and imports it into OpenCTI.
+    Set dry_run=True to preview extraction without pushing to OpenCTI.
+    Example: ingest_report('https://www.trendmicro.com/en_us/research/25/g/lumma-stealer-returns.html')
+    """
+    import re, uuid, requests as _req
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return {"error": "ANTHROPIC_API_KEY not set in environment."}
+
+    # 1. Fetch
+    try:
+        try:
+            import trafilatura
+            dl = trafilatura.fetch_url(url)
+            content = trafilatura.extract(dl, include_tables=True, include_links=False) or ""
+        except ImportError:
+            r = _req.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+            content = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', r.text)).strip()
+        if not content.strip():
+            return {"error": "Could not extract content from URL"}
+        content = content[:90000]
+    except Exception as e:
+        return {"error": f"Fetch failed: {e}"}
+
+    # 2. Extract via Claude
+    PROMPT = ('You are a senior CTI analyst. Extract ALL threat intelligence from the report. '
+              'Return ONLY valid JSON (no markdown) with this schema:\n'
+              '{"report_meta":{"title":"","published":"YYYY-MM-DD","authors":[],"tlp":"white"},'
+              '"malware":[{"name":"","aliases":[],"description":"","malware_types":["infostealer"],"is_family":true}],'
+              '"threat_actors":[{"name":"","aliases":[],"description":"","sophistication":"intermediate","motivation":"financial-gain"}],'
+              '"ttps":[{"technique_id":"T1234","technique_name":"","tactic":"","description":""}],'
+              '"iocs":[{"type":"domain-name|ipv4-addr|url|file","value":"","hashes":{},"description":"","confidence":80}],'
+              '"vulnerabilities":[{"cve":"CVE-YYYY-NNNNN","description":""}]}\n'
+              'Extract EVERY IOC, every real ATT&CK ID, all malware families, all actors.\n\nREPORT:\n')
+    try:
+        import anthropic as _ant
+        msg = _ant.Anthropic(api_key=api_key).messages.create(
+            model="claude-opus-4-5", max_tokens=8192,
+            messages=[{"role": "user", "content": PROMPT + content}]
+        )
+        raw = re.sub(r'```[a-z]*\s*', '', msg.content[0].text.strip()).strip('`').strip()
+        intel = json.loads(raw)
+    except Exception as e:
+        return {"error": f"Claude extraction failed: {e}"}
+
+    # 3. Build STIX2 bundle
+    TLP_W = "marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9"
+    NS    = uuid.UUID("00abedb4-aa42-466c-9c01-fed23315a9b7")
+    now   = __import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def sid(t, v):  return f"{t}--{uuid.uuid5(NS, f'{t}:{v.lower()}')}"
+    def rel(o, s, rt, tg):
+        o.append({"type":"relationship","spec_version":"2.1","id":sid("relationship",f"{s}:{rt}:{tg}"),
+                  "created":now,"modified":now,"created_by_ref":iid,"relationship_type":rt,
+                  "source_ref":s,"target_ref":tg,"object_marking_refs":[TLP_W]})
+
+    meta   = intel.get("report_meta", {})
+    author = (meta.get("authors") or ["Unknown"])[0]
+    iid    = sid("identity", author)
+    objs   = [{"type":"identity","spec_version":"2.1","id":iid,"created":now,
+               "modified":now,"name":author,"identity_class":"organization"}]
+    mids, aids, tids, oids = {}, {}, {}, []
+
+    for m in intel.get("malware") or []:
+        mid = sid("malware", m["name"]); mids[m["name"]] = mid
+        o = {"type":"malware","spec_version":"2.1","id":mid,"created":now,"modified":now,
+             "created_by_ref":iid,"name":m["name"],"description":m.get("description",""),
+             "malware_types":m.get("malware_types") or ["unknown"],"is_family":True,
+             "object_marking_refs":[TLP_W]}
+        if m.get("aliases"): o["aliases"] = m["aliases"]
+        objs.append(o)
+
+    for a in intel.get("threat_actors") or []:
+        aid = sid("threat-actor", a["name"]); aids[a["name"]] = aid
+        objs.append({"type":"threat-actor","spec_version":"2.1","id":aid,"created":now,
+                     "modified":now,"created_by_ref":iid,"name":a["name"],
+                     "description":a.get("description",""),"aliases":a.get("aliases") or [],
+                     "sophistication":a.get("sophistication","intermediate"),"resource_level":"criminal",
+                     "primary_motivation":a.get("motivation","financial-gain"),"object_marking_refs":[TLP_W]})
+
+    for t in intel.get("ttps") or []:
+        key = t.get("technique_id") or t["technique_name"]; tid = sid("attack-pattern", key); tids[key] = tid
+        o = {"type":"attack-pattern","spec_version":"2.1","id":tid,"created":now,"modified":now,
+             "created_by_ref":iid,"name":t["technique_name"],"description":t.get("description",""),
+             "kill_chain_phases":[{"kill_chain_name":"mitre-attack","phase_name":t.get("tactic","unknown")}],
+             "object_marking_refs":[TLP_W]}
+        if t.get("technique_id"):
+            o["external_references"] = [{"source_name":"mitre-attack","external_id":t["technique_id"],
+                "url":f"https://attack.mitre.org/techniques/{t['technique_id'].replace('.','/')}/"}]
+        objs.append(o)
+
+    for ioc in intel.get("iocs") or []:
+        tp, val = ioc.get("type",""), ioc.get("value",""); pat = None
+        if tp == "domain-name" and val:   pat = f"[domain-name:value = '{val}']"
+        elif tp == "ipv4-addr" and val:   pat = f"[ipv4-addr:value = '{val}']"
+        elif tp == "url" and val:         pat = f"[url:value = '{val}']"
+        elif tp == "file":
+            h = ioc.get("hashes") or {}
+            if h.get("SHA-256"): pat = f"[file:hashes.'SHA-256' = '{h['SHA-256']}']"
+            elif h.get("MD5"):   pat = f"[file:hashes.MD5 = '{h['MD5']}']"
+        if not pat: continue
+        oid = sid("indicator", pat); oids.append(oid)
+        objs.append({"type":"indicator","spec_version":"2.1","id":oid,"created":now,"modified":now,
+                     "created_by_ref":iid,"name":ioc.get("description") or val or "indicator",
+                     "description":ioc.get("description",""),"pattern":pat,"pattern_type":"stix",
+                     "pattern_version":"2.1","valid_from":now,"confidence":int(ioc.get("confidence") or 70),
+                     "indicator_types":["malicious-activity"],"object_marking_refs":[TLP_W]})
+
+    for m_id in mids.values():
+        for t_id in tids.values(): rel(objs, m_id, "uses", t_id)
+    for a_id in aids.values():
+        for m_id in mids.values(): rel(objs, a_id, "uses", m_id)
+    for oid in oids:
+        for m_id in mids.values(): rel(objs, oid, "indicates", m_id)
+
+    all_refs = list(set(list(mids.values()) + list(aids.values()) + list(tids.values()) + oids + [iid]))
+    pub = meta.get("published") or now[:10]
+    objs.append({"type":"report","spec_version":"2.1","id":sid("report",url),"created":now,
+                 "modified":now,"created_by_ref":iid,"name":meta.get("title") or "CTI Report",
+                 "description":f"Ingested from: {url}","published":f"{pub}T00:00:00Z",
+                 "report_types":["threat-report"],"object_refs":all_refs,
+                 "external_references":[{"source_name":author,"url":url}],"object_marking_refs":[TLP_W]})
+
+    bundle  = {"type":"bundle","id":f"bundle--{uuid.uuid4()}","objects":objs}
+    summary = {"source_url":url,"report_title":meta.get("title",""),
+               "malware":len(mids),"threat_actors":len(aids),"ttps":len(tids),
+               "iocs":len(oids),"stix_objects":len(objs)}
+
+    if dry_run:
+        summary["status"] = "dry_run — not pushed to OpenCTI"
+        return summary
+
+    # 4. Push to OpenCTI
+    try:
+        get_client().stix2.import_bundle_from_json(json.dumps(bundle))
+        summary["status"] = "imported to OpenCTI"
+    except Exception as e:
+        summary["status"] = f"push failed: {e}"
+    return summary
+
 
 if __name__ == "__main__":
     mcp.run()
