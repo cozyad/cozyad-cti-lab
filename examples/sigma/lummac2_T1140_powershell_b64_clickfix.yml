@@ -1,0 +1,45 @@
+title: LummaC2 - PowerShell Base64 ClickFix Dropper
+id: b2e4d9f3-5c8a-4f1b-9d3e-2e7c6b4f8a02
+status: experimental
+description: >
+    Detects PowerShell execution with both Base64 encoding indicators AND
+    IEX/Invoke-Expression in the same CommandLine — the signature pattern of
+    LummaC2 ClickFix dropper delivery. ClickFix campaigns instruct victims
+    to paste a PowerShell command that decodes and executes a remote payload.
+    IMPORTANT: Both conditions must appear in the same CommandLine.
+    -EncodedCommand alone does not trigger this rule.
+    Validated against live Sysmon telemetry (AA25-141B lab).
+references:
+    - https://attack.mitre.org/techniques/T1140
+    - https://attack.mitre.org/techniques/T1027
+    - https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-141b
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1140
+    - attack.t1027
+    - attack.defense-evasion
+    - lummac2
+    - clickfix
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_image:
+        Image|endswith: '\powershell.exe'
+    selection_exec:
+        CommandLine|contains|any:
+            - 'IEX'
+            - 'Invoke-Expression'
+    selection_b64:
+        CommandLine|contains|any:
+            - 'FromBase64String'
+            - '-EncodedCommand'
+            - ' -enc '
+            - ' -e '
+    condition: selection_image and selection_exec and selection_b64
+falsepositives:
+    - Legitimate IT automation using encoded PowerShell with Invoke-Expression
+      (rare — cross-reference ParentImage against known admin tools)
+    - Software deployment scripts using encoded commands
+level: high

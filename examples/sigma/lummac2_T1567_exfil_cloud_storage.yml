@@ -1,0 +1,40 @@
+title: LummaC2 - Data Exfiltration to Cloud Storage
+id: b4e6d1f5-7c0a-4f3b-1d5e-4e9c8b6a0d24
+status: experimental
+description: >
+    Detects connections or command-line references to cloud storage services
+    used by LummaC2 for data exfiltration. LummaC2 exfiltrates harvested
+    credentials, cookies, and files to attacker-controlled cloud storage
+    (Telegram bots, GoFile, Dropbox, Anonfiles) to avoid detection by
+    traditional DLP tools that focus on email and USB.
+references:
+    - https://attack.mitre.org/techniques/T1567/002
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1567.002
+    - attack.exfiltration
+    - lummac2
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_network:
+        CommandLine|contains|any:
+            - 'api.telegram.org'
+            - 'gofile.io'
+            - 'anonfiles.com'
+            - 'transfer.sh'
+            - 'pixeldrain.com'
+            - 'file.io'
+    selection_ps_upload:
+        Image|endswith: '\powershell.exe'
+        CommandLine|contains|any:
+            - 'UploadFile'
+            - 'UploadData'
+            - 'multipart/form-data'
+    condition: selection_network or selection_ps_upload
+falsepositives:
+    - Legitimate Telegram API usage by approved bots or applications
+    - Approved file sharing services in use by the organisation
+level: high

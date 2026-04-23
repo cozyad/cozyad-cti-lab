@@ -1,0 +1,41 @@
+title: LummaC2 - Suspicious PowerShell Execution via ClickFix
+id: f6c8b3d7-9a2e-4d5f-3b7c-6c1a0f8d2e46
+status: experimental
+description: >
+    Detects PowerShell spawned from unusual parent processes associated with
+    LummaC2 ClickFix initial access. ClickFix instructs victims to open Run
+    or a browser console and paste a PowerShell command — resulting in PowerShell
+    being spawned from explorer.exe (Run dialog), cmd.exe, mshta.exe, or
+    directly from browser processes.
+references:
+    - https://attack.mitre.org/techniques/T1059/001
+    - https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-141b
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1059.001
+    - attack.execution
+    - lummac2
+    - clickfix
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_image:
+        Image|endswith: '\powershell.exe'
+    selection_parent:
+        ParentImage|endswith|any:
+            - '\chrome.exe'
+            - '\msedge.exe'
+            - '\firefox.exe'
+            - '\mshta.exe'
+            - '\wscript.exe'
+            - '\cscript.exe'
+            - '\winword.exe'
+            - '\excel.exe'
+            - '\onenote.exe'
+    condition: selection_image and selection_parent
+falsepositives:
+    - Rare legitimate cases where browser extensions invoke PowerShell
+    - Office macros with explicit PowerShell calls (should be blocked by policy)
+level: high

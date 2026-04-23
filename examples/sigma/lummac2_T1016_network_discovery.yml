@@ -1,0 +1,35 @@
+title: LummaC2 - Network Configuration Discovery
+id: a7d9c4e8-0b3f-4e6a-4c8d-7d2b1a9e3f57
+status: experimental
+description: >
+    Detects execution of network discovery commands used by LummaC2 to map
+    the victim's network environment post-compromise. Commonly run alongside
+    T1082 system discovery as part of a rapid recon cluster.
+references:
+    - https://attack.mitre.org/techniques/T1016
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1016
+    - attack.discovery
+    - lummac2
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith|any:
+            - '\ipconfig.exe'
+            - '\arp.exe'
+            - '\nslookup.exe'
+            - '\route.exe'
+            - '\netstat.exe'
+        CommandLine|contains|any:
+            - '/all'
+            - '-a'
+            - 'print'
+    condition: selection
+falsepositives:
+    - Network troubleshooting by administrators
+    - Monitoring and inventory agents
+level: low

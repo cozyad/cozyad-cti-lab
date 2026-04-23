@@ -1,0 +1,57 @@
+title: LummaC2 - C2 Communication via Web Protocols
+id: a3d5c0e4-6b9f-4e2a-0c4d-3d8b7a5f9c13
+status: experimental
+description: >
+    Detects network connections from non-browser processes to external
+    destinations on HTTP/HTTPS ports — indicative of LummaC2 C2 beacon
+    or data exfiltration traffic. LummaC2 uses standard web protocols
+    to blend C2 traffic with legitimate browsing.
+    Tune filter list to your environment's known-good processes.
+references:
+    - https://attack.mitre.org/techniques/T1071/001
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1071.001
+    - attack.command-and-control
+    - lummac2
+logsource:
+    category: network_connection
+    product: windows
+detection:
+    selection:
+        DestinationPort|in:
+            - 80
+            - 443
+            - 8080
+            - 8443
+        Initiated: 'true'
+    filter_browsers:
+        Image|endswith|any:
+            - '\chrome.exe'
+            - '\msedge.exe'
+            - '\firefox.exe'
+            - '\iexplore.exe'
+    filter_system:
+        Image|endswith|any:
+            - '\svchost.exe'
+            - '\MsMpEng.exe'
+            - '\OneDrive.exe'
+            - '\Teams.exe'
+            - '\outlook.exe'
+            - '\SearchApp.exe'
+            - '\WaaSMedicAgent.exe'
+    filter_local:
+        DestinationIp|startswith|any:
+            - '10.'
+            - '192.168.'
+            - '172.16.'
+            - '127.'
+    condition: selection and not (filter_browsers or filter_system or filter_local)
+falsepositives:
+    - Legitimate third-party applications making web requests
+    - Extend filter list with approved software in your environment
+level: low
+# Hunting note: Combine with T1082 or T1140 detections — a host that ran
+# discovery tools and then made unexpected web connections within 5 minutes
+# is a high-confidence indicator of compromise.

@@ -1,0 +1,50 @@
+title: LummaC2 - Browser Cookie and Session Data Theft
+id: d4a6f1b5-7e0c-4b3d-1f5a-4a9e8d6b0c24
+status: experimental
+description: >
+    Detects non-browser processes creating or accessing browser cookie and
+    credential store files. LummaC2 directly reads browser profile directories
+    to steal session cookies, saved passwords, and autofill data.
+    Excludes browser processes and known browser update utilities.
+    Note: Sysmon EventCode=11 fires on executable extensions only under
+    SwiftOnSecurity config — extensionless files (e.g. bare 'Cookies') are
+    not captured. Detection relies on .exe copies or Login Data access.
+    Validated against live Sysmon telemetry (AA25-141B lab).
+references:
+    - https://attack.mitre.org/techniques/T1539
+    - https://attack.mitre.org/techniques/T1555/003
+    - https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-141b
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1539
+    - attack.t1555.003
+    - attack.credential-access
+    - lummac2
+logsource:
+    category: file_event
+    product: windows
+detection:
+    selection:
+        TargetFilename|contains|any:
+            - '\Chrome\User Data\'
+            - '\Edge\User Data\'
+            - '\Firefox\Profiles\'
+            - 'Cookies'
+            - 'Login Data'
+            - 'Web Data'
+            - 'Session Storage'
+    filter:
+        Image|endswith|any:
+            - '\chrome.exe'
+            - '\msedge.exe'
+            - '\firefox.exe'
+            - '\GoogleUpdate.exe'
+            - '\MicrosoftEdgeUpdate.exe'
+            - '\MsMpEng.exe'
+    condition: selection and not filter
+falsepositives:
+    - Password managers with browser integration (1Password, Bitwarden, KeePass)
+    - Backup software reading user profile directories
+    - Browser sync utilities
+level: high

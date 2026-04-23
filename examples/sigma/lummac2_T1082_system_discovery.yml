@@ -1,0 +1,42 @@
+title: LummaC2 - System Information Discovery
+id: a1f3c8e2-4b7d-4e9a-8c2f-1d6b5a3e7f91
+status: experimental
+description: >
+    Detects execution of system discovery tools associated with LummaC2
+    post-compromise reconnaissance. LummaC2 profiles the victim environment
+    immediately after execution using built-in Windows utilities.
+    Validated against live Sysmon telemetry (AA25-141B lab).
+references:
+    - https://attack.mitre.org/techniques/T1082
+    - https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-141b
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1082
+    - attack.t1016
+    - attack.t1033
+    - attack.discovery
+    - lummac2
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith:
+            - '\systeminfo.exe'
+            - '\wmic.exe'
+            - '\ipconfig.exe'
+            - '\hostname.exe'
+            - '\whoami.exe'
+            - '\nltest.exe'
+            - '\net.exe'
+            - '\net1.exe'
+    condition: selection
+falsepositives:
+    - IT administration and monitoring scripts
+    - SCCM/Intune management agents
+    - Scheduled inventory tasks (cross-reference against known task inventory)
+level: low
+# Hunting note: Elevated to HIGH when 3+ of these tools fire within 2 minutes
+# from the same ParentImage on the same host — indicates recon cluster.
+# See threat_hunting_lummac2.md Hunt 2 for the correlation search.

@@ -1,0 +1,45 @@
+title: LummaC2 - Ingress Tool Transfer via LOLBins
+id: f2c4b9d3-5a8e-4d1f-9b3c-2c7a6f4d8e02
+status: experimental
+description: >
+    Detects use of built-in Windows utilities (LOLBins) to download
+    additional tools or payloads from the internet. LummaC2 uses certutil,
+    bitsadmin, and PowerShell Invoke-WebRequest/curl to pull secondary
+    payloads after initial access — avoiding writing a downloader to disk.
+references:
+    - https://attack.mitre.org/techniques/T1105
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1105
+    - attack.command-and-control
+    - lummac2
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_certutil:
+        Image|endswith: '\certutil.exe'
+        CommandLine|contains|any:
+            - '-decode'
+            - '-urlcache'
+            - 'http'
+    selection_bitsadmin:
+        Image|endswith: '\bitsadmin.exe'
+        CommandLine|contains: '/transfer'
+    selection_ps_download:
+        Image|endswith: '\powershell.exe'
+        CommandLine|contains|any:
+            - 'Invoke-WebRequest'
+            - 'iwr '
+            - 'wget '
+            - 'curl '
+            - 'DownloadFile'
+            - 'DownloadString'
+            - 'Net.WebClient'
+    condition: selection_certutil or selection_bitsadmin or selection_ps_download
+falsepositives:
+    - Legitimate software using certutil for certificate operations (without -urlcache)
+    - BITS-based Windows Update transfers
+    - Approved IT scripts downloading packages
+level: medium

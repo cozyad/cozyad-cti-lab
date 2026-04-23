@@ -1,0 +1,40 @@
+title: LummaC2 - Double Extension Executable Masquerade
+id: c3f5e0a4-6d9b-4a2c-0e4f-3f8d7c5a9b13
+status: experimental
+description: >
+    Detects execution of files using double extensions to masquerade as
+    documents (e.g. invoice_2026.pdf.exe). LummaC2 is commonly delivered
+    as a double-extension executable in phishing lures and malvertising
+    campaigns. The file appears to be a PDF or Office document but executes
+    as a Windows binary.
+    Validated against live Sysmon telemetry (AA25-141B lab).
+references:
+    - https://attack.mitre.org/techniques/T1036
+    - https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-141b
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1036
+    - attack.t1036.007
+    - attack.defense-evasion
+    - lummac2
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|contains|any:
+            - '.pdf.exe'
+            - '.doc.exe'
+            - '.docx.exe'
+            - '.xlsx.exe'
+            - '.xls.exe'
+            - '.zip.exe'
+            - '.rar.exe'
+            - '.jpg.exe'
+            - '.png.exe'
+    condition: selection
+falsepositives:
+    - Extremely rare in legitimate software — treat all hits as suspicious
+    - Some legacy software installers with unusual naming (verify against software inventory)
+level: high

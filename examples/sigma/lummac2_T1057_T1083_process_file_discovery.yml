@@ -1,0 +1,41 @@
+title: LummaC2 - Process and File System Discovery
+id: b8e0d5f9-1c4a-4f7b-5d9e-8e3c2b0f4a68
+status: experimental
+description: >
+    Detects process enumeration and file/directory discovery commands used
+    by LummaC2 to identify running security tools, find credential files,
+    and profile the filesystem. Commonly run as part of a rapid post-execution
+    recon cluster within 2 minutes of initial access.
+references:
+    - https://attack.mitre.org/techniques/T1057
+    - https://attack.mitre.org/techniques/T1083
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1057
+    - attack.t1083
+    - attack.discovery
+    - lummac2
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_process:
+        Image|endswith|any:
+            - '\tasklist.exe'
+            - '\qprocess.exe'
+    selection_dir:
+        Image|endswith|any:
+            - '\cmd.exe'
+            - '\powershell.exe'
+        CommandLine|contains|any:
+            - 'dir /s'
+            - 'Get-ChildItem'
+            - 'gci '
+            - 'ls -r'
+            - 'tree '
+    condition: selection_process or selection_dir
+falsepositives:
+    - Legitimate administrative inventory scripts
+    - Backup and monitoring agents
+level: low

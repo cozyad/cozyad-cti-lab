@@ -1,0 +1,35 @@
+title: LummaC2 - Screen Capture via PowerShell
+id: e1b3a8c2-4f7d-4c0e-8a2b-1b6f5e3c7d91
+status: experimental
+description: >
+    Detects PowerShell-based screen capture used by LummaC2 to capture
+    the victim's desktop, including open banking portals, email, and
+    credentials displayed on screen. Uses .NET CopyFromScreen() method
+    which leaves a characteristic string in the PowerShell CommandLine.
+references:
+    - https://attack.mitre.org/techniques/T1113
+author: BeastIntel / cozyad-cti-lab
+date: 2026-04-23
+tags:
+    - attack.t1113
+    - attack.collection
+    - lummac2
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\powershell.exe'
+        CommandLine|contains|any:
+            - 'CopyFromScreen'
+            - 'DrawToBitmap'
+            - 'Graphics.FromImage'
+            - 'System.Drawing.Bitmap'
+            - 'screenshot'
+            - 'Screen.PrimaryScreen'
+    condition: selection
+falsepositives:
+    - Legitimate screen capture utilities using PowerShell backend
+    - Remote monitoring tools
+    - Test automation frameworks (Selenium)
+level: medium
