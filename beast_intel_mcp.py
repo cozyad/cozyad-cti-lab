@@ -64,7 +64,7 @@ from pycti import OpenCTIApiClient
 mcp = FastMCP("BeastIntel-CTI-Bridge")
 
 OPENCTI_URL = os.getenv("OPENCTI_URL", "http://localhost:8080")
-OPENCTI_TOKEN = os.getenv("OPENCTI_TOKEN", "4caa7dc1-af32-445e-99fa-e551c3d29527")
+OPENCTI_TOKEN = os.getenv("OPENCTI_TOKEN", "ChangeMe-your-opencti-admin-token")
 
 _client = None
 
