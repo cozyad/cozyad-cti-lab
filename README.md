@@ -65,7 +65,7 @@ Claude Code (Windows)
        │
        │ SSH via IAP Tunnel (127.0.0.1:2222)
        │
-GCP Compute Engine VM
+GCP Compute Engine — VM1 (cti-platform)
        │
        ├── mcp_stdin_filter.py
        │         │
@@ -73,15 +73,28 @@ GCP Compute Engine VM
        │         │
        │    OpenCTI GraphQL API (localhost:8080/graphql)
        │         │
-       └── Docker Compose Stack
-             ├── OpenCTI
-             ├── Elasticsearch
-             ├── RabbitMQ
-             ├── Redis
-             └── MinIO
+       ├── Docker Compose Stack
+       │     ├── OpenCTI
+       │     ├── Elasticsearch
+       │     ├── RabbitMQ
+       │     ├── Redis
+       │     ├── MinIO
+       │     └── Splunk (receiver :9997, UI :8000)
+       │
+       │   internal VPC :9997
+       ▼
+GCP Compute Engine — VM2 (cti-win-detonation)
+       │
+       ├── Sysmon (SwiftOnSecurity config)
+       ├── Splunk Universal Forwarder
+       └── Invoke-AtomicRedTeam + atomics library
+             └── Lumma TTP chain (atomic/lumma_ttp_chain.ps1)
 ```
 
-No public IP. All access via GCP Identity-Aware Proxy — authenticated, audited, zero exposed attack surface.
+No public IP on either VM. All access via GCP Identity-Aware Proxy —
+authenticated, audited, zero exposed attack surface. See
+[`docs/vm2_detonation_lab.md`](docs/vm2_detonation_lab.md) for the Windows
+detonation range.
 
 ---
 
@@ -175,6 +188,46 @@ I have spent 20 years delivering threat intelligence operationally in UK law enf
 This lab is the answer to that question. Built from scratch, on a real cloud platform, with real data, at production standards — not a lab exercise but a working system I actively use for intelligence production.
 
 The Beast Intel MCP integration represents the next evolution: not just a platform that stores intelligence, but one that can be queried conversationally by an AI analyst — collapsing the distance between raw data and finished intelligence product.
+
+---
+
+## Detonation Range (VM2)
+
+A second GCP VM runs Windows Server 2022 as an isolated detonation range for
+adversary-emulation telemetry generation. Red Canary's **Atomic Red Team**
+drives a TTP chain that mimics Lumma Stealer behaviours; Sysmon and PowerShell
+logs are forwarded to the Splunk indexer on VM1 over the internal VPC.
+
+**Provisioning: Terraform (preferred) or gcloud**
+
+Terraform is the default path — it matches the existing IaC discipline on VM1,
+keeps state reproducible, and makes tearing down the detonation range a
+one-command operation. The bash script is retained as a zero-dependency
+fallback for quick rebuilds or environments without Terraform installed.
+
+```bash
+cd infra/terraform/vm2
+cp terraform.tfvars.example terraform.tfvars   # edit with your project + VM1 IP
+terraform init
+terraform plan
+terraform apply
+terraform destroy                              # tear down when not needed
+```
+
+Fallback (bash / gcloud CLI):
+```bash
+export PROJECT_ID=... VM1_INTERNAL_IP=...
+./infra/gcp/create_windows_vm.sh
+```
+
+**Files**
+- `infra/terraform/vm2/` — Terraform module (preferred)
+- `infra/gcp/create_windows_vm.sh` — gcloud script (fallback)
+- `infra/bootstrap/windows_startup.ps1` — first-boot Sysmon + UF + Atomic RT
+- `atomic/lumma_ttp_chain.ps1` — 13-technique Lumma behaviour chain
+- `splunk/forwarder/` — UF inputs/outputs (source of truth)
+- `splunk/indexer/indexes.conf` — indexes definitions for VM1
+- `docs/vm2_detonation_lab.md` — provisioning + demo runbook
 
 ---
 
