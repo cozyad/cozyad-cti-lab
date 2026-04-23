@@ -106,6 +106,27 @@ kill chain timeline, triggered alerts table, alert counts by rule.
 
 ---
 
+## Detection Languages: SPL, Sigma, YARA
+
+Three complementary detection technologies are used across this platform — each operating at a different layer of the kill chain:
+
+**SPL (Splunk Processing Language)** — the live detection layer. SPL queries run as scheduled searches against `index=sysmon` on the Splunk indexer. When results exceed zero, the rule fires an alert to `index=_audit`. This is the operational layer — the 16 BeastIntel rules are all SPL, tuned against real Sysmon telemetry from VM2. SPL detects *behavioural events that already happened* on an endpoint.
+
+**Sigma** — the vendor-neutral, portable layer. Sigma is an open standard for writing detection logic that isn't tied to any specific SIEM. A Sigma rule can be compiled to SPL, KQL (Microsoft Sentinel), Elastic DSL, or Chronicle YARA-L. Beast Intel generates Sigma rules from actor TTP profiles — the value is that a rule written once can be deployed anywhere. `examples/sigma_T1621_mfa_fatigue.yaml` is a working example.
+
+**YARA** — the malware and file-level layer. Where SPL detects process and event behaviour, YARA scans file content and memory for byte patterns, strings, and structural characteristics specific to a malware family. Beast Intel generates YARA rules from actor tooling profiles. Current gap: rules are generated but not yet deployed to a scanning engine on VM2 — this is on the next sprint backlog.
+
+**How they fit together in a real CTI pipeline:**
+```
+Threat Intel (OpenCTI / Beast Intel)
+        │
+        ├── YARA rules  → endpoint AV / EDR / sandbox scanning → block/alert on malware files
+        ├── Sigma rules → compile to SPL/KQL → SIEM detection → alert on behaviours
+        └── SPL rules   → live Splunk searches → operational detection pipeline → dashboard
+```
+
+---
+
 ## Beast Intel — MCP Server
 
 The core innovation of this build is **Beast Intel** — a custom Model Context
