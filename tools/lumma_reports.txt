@@ -1,0 +1,31 @@
+# Lumma Stealer / LummaC2 — Vendor Report Batch
+# Run: python cti_report_ingestor.py --batch lumma_reports.txt
+
+# ESET
+https://www.eset.com/blog/en/business-topics/threat-landscape/lumma-stealer-threat/
+
+# Trend Micro
+https://www.trendmicro.com/en_us/research/25/g/lumma-stealer-returns.html
+https://www.trendmicro.com/en_us/research/25/a/lumma-stealers-github-based-delivery-via-mdr.html
+https://www.trendmicro.com/en_us/research/25/k/lumma-stealer-browser-fingerprinting.html
+
+# Microsoft
+https://www.microsoft.com/en-us/security/blog/2025/05/21/lumma-stealer-breaking-down-the-delivery-techniques-and-capabilities-of-a-prolific-infostealer/
+
+# Google / Mandiant
+https://cloud.google.com/blog/topics/threat-intelligence/lummac2-obfuscation-through-indirect-control-flow
+
+# CrowdStrike
+https://www.crowdstrike.com/en-us/blog/lumma-stealer-with-cypherit-phishing-lure/
+
+# Cloudflare Threat Intelligence
+https://www.cloudflare.com/cloudforce-one/research/loot-load-repeat-dissecting-the-lumma-stealer-playbook/
+
+# Red Canary
+https://redcanary.com/threat-detection-report/threats/lummac2/
+
+# Cybereason
+https://www.cybereason.com/blog/threat-analysis-rise-of-lummastealer
+
+# Outpost24 (anti-sandbox trigonometry technique)
+https://outpost24.com/blog/lummac2-anti-sandbox-technique-trigonometry-human-detection/
