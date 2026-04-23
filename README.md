@@ -102,6 +102,8 @@ http://<splunk-host>:8000/en-US/app/search/beastintel_lummac2_detections
 10 panels: pipeline health chart, TTP hit summary, 5 TTP detail tables,
 kill chain timeline, triggered alerts table, alert counts by rule.
 
+![BeastIntel LummaC2 AA25-141B Detection Dashboard](docs/screenshots/dashboard_aa25141b.png)
+
 ---
 
 ## Beast Intel — MCP Server
