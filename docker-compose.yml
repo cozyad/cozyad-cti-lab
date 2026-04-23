@@ -83,6 +83,25 @@ services:
       interval: 30s
       timeout: 30s
       retries: 3
+  splunk:
+    image: splunk/splunk:latest
+    environment:
+      - SPLUNK_PASSWORD=${SPLUNK_PASSWORD}
+      - SPLUNK_START_ARGS=${SPLUNK_START_ARGS}
+      - SPLUNK_GENERAL_TERMS=${SPLUNK_GENERAL_TERMS}
+    ports:
+      - "8000:8000"
+      - "8088:8088"
+      - "8089:8089"
+    volumes:
+      - splunkdata:/opt/splunk/var
+      - splunketc:/opt/splunk/etc
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   ###########################
   # COMMON                  #
@@ -401,6 +420,32 @@ services:
     depends_on:
       opencti:
         condition: service_healthy
+  connector-splunk:
+    image: opencti/connector-splunk:latest
+    environment:
+      - OPENCTI_URL=http://opencti:8080
+      - OPENCTI_TOKEN=${OPENCTI_ADMIN_TOKEN}
+      - CONNECTOR_ID=${CONNECTOR_SPLUNK_ID}
+      - CONNECTOR_TYPE=STREAM
+      - CONNECTOR_NAME=Splunk
+      - CONNECTOR_LIVE_STREAM_ID=c8b22579-0033-435a-8904-59c3c9b5b689
+      - CONNECTOR_LIVE_STREAM_LISTEN_DELETE=true
+      - CONNECTOR_LIVE_STREAM_NO_DEPENDENCIES=false
+      - CONNECTOR_LOG_LEVEL=info
+      - SPLUNK_URL=${CONNECTOR_SPLUNK_URL}
+      - SPLUNK_TOKEN=${CONNECTOR_SPLUNK_TOKEN}
+      - SPLUNK_AUTH_TYPE=Basic
+      - SPLUNK_OWNER=nobody
+      - SPLUNK_SSL_VERIFY=false
+      - SPLUNK_APP=search
+      - SPLUNK_KV_STORE_NAME=opencti_indicators
+      - SPLUNK_IGNORE_TYPES=Note,Opinion,Observed-Data
+    restart: always
+    depends_on:
+      opencti:
+        condition: service_healthy
+      splunk:
+        condition: service_healthy
   # OPENCTI DEFAULT DATA    #
   ###########################
 
@@ -437,3 +482,5 @@ volumes:
   redisdata:
   amqpdata:
   rsakeys:
+  splunkdata:
+  splunketc:
