@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+project_id      = "your-gcp-project"
+region          = "europe-west2"
+zone            = "europe-west2-a"
+network         = "default"
+subnetwork      = "default"
+vm1_internal_ip = "10.0.0.2"
+
+# Optional overrides — defaults are in variables.tf
+# vm_name            = "cti-win-detonation"
+# machine_type       = "e2-standard-2"
+# boot_disk_size_gb  = 80
+# vm1_platform_tag   = "cti-platform"

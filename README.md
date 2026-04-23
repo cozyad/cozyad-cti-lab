@@ -198,7 +198,31 @@ adversary-emulation telemetry generation. Red Canary's **Atomic Red Team**
 drives a TTP chain that mimics Lumma Stealer behaviours; Sysmon and PowerShell
 logs are forwarded to the Splunk indexer on VM1 over the internal VPC.
 
-- `infra/gcp/create_windows_vm.sh` — gcloud provisioning + firewall rules
+**Provisioning: Terraform (preferred) or gcloud**
+
+Terraform is the default path — it matches the existing IaC discipline on VM1,
+keeps state reproducible, and makes tearing down the detonation range a
+one-command operation. The bash script is retained as a zero-dependency
+fallback for quick rebuilds or environments without Terraform installed.
+
+```bash
+cd infra/terraform/vm2
+cp terraform.tfvars.example terraform.tfvars   # edit with your project + VM1 IP
+terraform init
+terraform plan
+terraform apply
+terraform destroy                              # tear down when not needed
+```
+
+Fallback (bash / gcloud CLI):
+```bash
+export PROJECT_ID=... VM1_INTERNAL_IP=...
+./infra/gcp/create_windows_vm.sh
+```
+
+**Files**
+- `infra/terraform/vm2/` — Terraform module (preferred)
+- `infra/gcp/create_windows_vm.sh` — gcloud script (fallback)
 - `infra/bootstrap/windows_startup.ps1` — first-boot Sysmon + UF + Atomic RT
 - `atomic/lumma_ttp_chain.ps1` — 13-technique Lumma behaviour chain
 - `splunk/forwarder/` — UF inputs/outputs (source of truth)
