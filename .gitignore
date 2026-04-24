@@ -1,0 +1,4 @@
+# Personal interview prep — keep local only, never commit
+docs/interview/
+interview-prep/
+*.interview.md
